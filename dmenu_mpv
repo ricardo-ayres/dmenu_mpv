@@ -1,0 +1,69 @@
+#!/bin/sh
+# music player dmenu interface
+
+MPV_OPTS="--audio-display=no"
+MEDIA_DIR="$HOME/Music"
+PLAYLIST="$HOME/playlist.txt"
+INPUT_PIPE="$HOME/.mpv_control"
+PIDFILE="$HOME/.mpv_pidfile"
+
+# JSON IPC commands
+UNPAUSE='{"command": ["set_property", "pause", false]}'
+PAUSE='{"command": ["set_property", "pause", true]}'
+NEXT='{"command": ["playlist-next"]}'
+PREV='{"command": ["playlist-prev"]}'
+
+## Functions
+media_play(){
+    if pkill --signal 0 -F "$PIDFILE"; then
+        # mpv already running, try to unpause
+        echo "$UNPAUSE" | socat - "$INPUT_PIPE"
+    else
+        # mpv not running, start it.
+        mpv "$MPV_OPTS" --playlist="$PLAYLIST" \
+            --input-ipc-server="$INPUT_PIPE" \
+            & echo "$!" > "$PIDFILE" && fg
+    fi
+}
+
+media_add(){
+    find "$MEDIA_DIR" -type d \
+        | dmenu -l 40 -p "Add to playlist:" >> $PLAYLIST \
+        && media_play;
+}
+
+media_clear(){
+    >"$PLAYLIST"
+}
+
+media_pause(){
+    echo "$PAUSE" | socat - "$INPUT_PIPE"
+}
+
+media_stop(){
+    pkill -F "$PIDFILE";
+}
+
+media_next(){
+    echo $NEXT | socat - "$INPUT_PIPE"
+}
+
+media_prev(){
+    echo $PREV | socat - "$INPUT_PIPE"
+}
+
+select_action(){
+    echo "play,pause,add,stop,clear,next,prev" | tr ',' '\n' | nl -w1 -s' ' \
+        | dmenu -l 10 -p "Action:" | cut -f2 -d ' '
+}
+
+## Main
+case "$(select_action)" in
+    "add") media_add;;
+    "clear") media_clear;;
+    "play") media_play;;
+    "pause") media_pause;;
+    "stop") media_stop;;
+    "next") media_next;;
+    "prev") media_prev;;
+esac
